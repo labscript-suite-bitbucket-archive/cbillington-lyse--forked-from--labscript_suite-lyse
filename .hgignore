@@ -5,3 +5,5 @@ syntax: glob
 *.log
 *.toc
 *.pyc
+.coverage.*
+coverage_html_report/*

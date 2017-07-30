@@ -56,6 +56,18 @@ import qtutils.icons
 
 from labscript_utils.modulewatcher import ModuleWatcher
 
+
+if os.getenv('COVERAGE_PROCESS_START') is not None:
+    # We're running with coverage.py, likely running the test suite. Add
+    # sigterm handler so that atexit handlers run even when terminated and
+    # coverage data is saved:
+    import signal
+    def sigterm_handler(_signo, _stack_frame):
+        sys.stderr.write('Terminated\n')
+        raise SystemExit(0)
+    signal.signal(signal.SIGTERM, sigterm_handler)
+
+
 class _DeprecationDict(dict):
     """Dictionary that spouts deprecation warnings when you try to access some
     keys."""
