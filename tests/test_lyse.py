@@ -220,7 +220,10 @@ class LyseTests(LyseTestCase):
                 self.assertTrue(inmain(view.isColumnHidden, i))
             else:
                 self.assertFalse(inmain(view.isColumnHidden, i))
-    def test_basic(self):
+
+
+    def test_basic_operations(self):
+        """A run through of typical usage of lyse"""
 
         # Add single shot rouines:
         self.add_routines(self.app.singleshot_routinebox,
@@ -246,6 +249,14 @@ class LyseTests(LyseTestCase):
         # Make the columns dialog only show 'x' and 'y':
         self.set_visible_columns(['x', 'y'])
 
+        # Unpause analysis:
+        inmain(self.app.filebox.ui.pushButton_analysis_running.click)
+
+        # wait for it to complete:
+        self.wait_for(lambda: self.app.multishot_routinebox.routines[-1].done)
+
+        #TODO: Make the analysis routines actually do things
+
         # Remove the single-shot routines by button press:
         self.remove_routines(self.app.singleshot_routinebox, [0, 1], method='button')
 
@@ -253,7 +264,10 @@ class LyseTests(LyseTestCase):
         self.remove_routines(self.app.multishot_routinebox, [0], method='delete')
         self.remove_routines(self.app.multishot_routinebox, [0], method='shift-delete')
 
-        
+        #TODO: inspect dataframe and shots_model._model
+
+        #TODO: remove shots
+
 
 if __name__ == '__main__':
     import unittest
