@@ -35,11 +35,11 @@ finally:
         os.unlink(path_file)
     except OSError:
         pass
-# try:
-#     print('processing coverage data...')
-#     subprocess.call([sys.executable, '-m', 'coverage', 'combine'])
-#     subprocess.call([sys.executable, '-m', 'coverage', 'html', '--rcfile=coveragerc'])
-#     subprocess.call([sys.executable, '-m', 'coverage', 'erase'])
-#     print('done')
-# except Exception:
-#     pass
+try:
+    print('processing coverage data...')
+    subprocess.call([sys.executable, '-m', 'coverage', 'combine'])
+    subprocess.call([sys.executable, '-m', 'coverage', 'html', '--rcfile=coveragerc'])
+    subprocess.call([sys.executable, '-m', 'coverage', 'erase'])
+    print('done')
+except Exception:
+    pass

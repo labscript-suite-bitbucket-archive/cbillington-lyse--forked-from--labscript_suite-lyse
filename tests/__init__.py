@@ -2,8 +2,11 @@ import sys
 import os
 import threading
 import shutil
-from labscript_utils.testing_utils import ThreadTestCase
 
+from qtutils.qt import QtCore
+from qtutils import inmain
+
+from labscript_utils.testing_utils import ThreadTestCase
 from labscript_utils import labscript_suite_install_dir
 from labscript_utils.labconfig import LabConfig
 import labscript_utils.labconfig
@@ -108,35 +111,36 @@ class LyseTestCase(ThreadTestCase):
         self.__main__ = globals_dict
         # Get a reference to the lyse app:
         self.app = self.__main__.app
-
+        
         # Wait for qt event loop to be capable of processing events:
-        from qtutils.qt import QtCore
-        from qtutils import inmain
         ready = threading.Event()
         timer = inmain(QtCore.QTimer.singleShot, 0, ready.set)
         ready.wait()
 
     def quit_lyse(self):
         if hasattr(self, 'app'):
-            from qtutils import inmain
             inmain(self.app.ui.close)
 
     def tearDown(self):
         try:
-            self.quit_lyse()
-        except Exception:
-            pass
+            if hasattr(self, 'app') and not inmain(self.app.ui.isActiveWindow):
+                raise RuntimeError("Must leave lyse window as active window during testing")
+        finally:
+            try:
+                self.quit_lyse()
+            except Exception:
+                pass
 
-        # Delete testing scratch directory and all its contents:
-        try:
-            shutil.rmtree(scratch_dir)
-        except OSError:
-            pass
-        # Restore labconfig to normal:
-        labscript_utils.labconfig.LabConfig = LabConfig
+            # Delete testing scratch directory and all its contents:
+            try:
+                shutil.rmtree(scratch_dir)
+            except OSError:
+                pass
+            # Restore labconfig to normal:
+            labscript_utils.labconfig.LabConfig = LabConfig
 
-        # Quit the mainloop:
-        self.quit_mainloop()
+            # Quit the mainloop:
+            self.quit_mainloop()
         
         
 

@@ -234,6 +234,7 @@ class AnalysisRoutine(object):
         to_worker, from_worker, worker = child_handles
         # Tell the worker what script it with be executing:
         to_worker.put(self.filepath)
+        # assert from_worker.get() == 'ready'
         return to_worker, from_worker, worker
         
     def do_analysis(self, filepath):
