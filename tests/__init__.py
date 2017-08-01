@@ -17,7 +17,7 @@ lyse_main_path = os.path.join(labscript_suite_install_dir, 'lyse', '__main__.py'
 
 experiment_name = "test_experiment"
 shared_drive = os.path.join(scratch_dir, "test_shared_drive")
-analysislib = os.path.join(this_dir, "analysislib")
+analysislib = os.path.join(this_dir, "test_analysislib")
 mock_labconfig_path = os.path.join(scratch_dir, "mock_labconfig.ini")
 
 mock_labconfig_contents = """

@@ -1,6 +1,9 @@
+from __future__ import print_function
 import os
-import six
-if six.PY2:
+import time
+from datetime import datetime, timedelta
+from labscript_utils import PY2
+if PY2:
     import mock
 else:
     import unittest.mock as mock
@@ -17,7 +20,54 @@ BAR_SINGLESHOT = os.path.join(analysislib, 'bar_singleshot.py')
 FOO_MULTISHOT = os.path.join(analysislib, 'foo_multishot.py')
 BAR_MULTISHOT = os.path.join(analysislib, 'bar_multishot.py')
 
+from runmanager import generate_sequence_id, make_run_files
 
+class FakeBLACS(object):
+    """a class that "runs" shot files, adding run time and other attributes.
+    Increments the run time by 30 seconds each time it is run, starting at the
+    present (this means it returns run times in the future)"""
+    _run_time = datetime.now()
+   
+    @classmethod
+    def run_time(cls):
+        """Increment the current run time by 30 seconds and return it as a
+        struct time tuple"""
+        cls._run_time += timedelta(seconds=30)
+        return cls._run_time.timetuple()
+
+    @classmethod
+    def run(cls, shot_file):
+        import h5py
+        """Add the minimal data that BLACS would add to a shot file"""
+        with h5py.File(shot_file) as f:
+            data_group = f.create_group('data')
+            # stamp with the run time of the experiment
+            f.attrs['run time'] = time.strftime('%Y%m%dT%H%M%S', cls.run_time())
+
+
+def make_shot_files(py_name, shot_globals=({},)):
+    """Generate a list of HDF files given"""
+    from labscript_utils.labconfig import LabConfig
+    storage = LabConfig().get('paths', 'experiment_shot_storage')
+    sequence_id = generate_sequence_id(py_name)
+    shot_files = list(make_run_files(storage, sequence_globals=None,
+                                     shots=shot_globals,
+                                     sequence_id=sequence_id))
+    for shot_file in shot_files:
+        FakeBLACS.run(shot_file)
+
+    return shot_files
+
+def submit_to_lyse(h5_filename):
+    # Send the hdf5 file to lyse, assuming it is running on localhost:
+    from labscript_utils.labconfig import LabConfig
+    import zprocess
+    config = LabConfig()
+    port = int(config.get('ports','lyse'))
+    data = {'filepath': os.path.abspath(h5_filename)}
+    response = zprocess.zmq_get(port, 'localhost', data)
+    if response != 'added successfully':
+        raise Exception(response)
 
 class LyseTests(LyseTestCase):
 
@@ -37,7 +87,8 @@ class LyseTests(LyseTestCase):
         selection_model.clearSelection()
         for row in rows:
             model_index = model.index(row, 0)
-            selection_model.select(model_index, QtCore.QItemSelectionModel.Select | QtCore.QItemSelectionModel.Rows)
+            flags = QtCore.QItemSelectionModel.Select | QtCore.QItemSelectionModel.Rows
+            selection_model.select(model_index, flags)
 
         # Verify:
         selected_indexes = treeview.selectedIndexes()
@@ -60,7 +111,8 @@ class LyseTests(LyseTestCase):
             routinebox.ui.toolButton_add_routines.click()
 
         # Verify the right directory was provided:
-        mock_file_open.assert_called_with(ANY, ANY, expected_file_open_dir, ANY)
+        if expected_file_open_dir is not None:
+            mock_file_open.assert_called_with(ANY, ANY, expected_file_open_dir, ANY)
 
         for i, path in enumerate(paths):
             # Verify the routine was added to the model:
@@ -106,32 +158,68 @@ class LyseTests(LyseTestCase):
 
         # Wait for them to go:
         for routine in routines:
-            self.wait_for(lambda: routine.worker.returncode is not None and not routine.exiting, timeout=5)
+            self.wait_for(lambda: (routine.worker.returncode is not None and
+                                   not routine.exiting),timeout=5)
 
          # Verify they're gone:
         remaining_paths = set(routine.filepath for routine in routinebox.routines)
         self.assertFalse(remaining_paths.intersection(set(paths)))
 
+    def add_shots(self, shots, method='button', expected_file_open_dir=None):
+        assert method in ['button', 'server']
+        assert not (method == 'button' and expected_file_open_dir is not None)
+
+        initial_nshots = inmain(self.app.filebox.shots_model._model.rowCount)
+
+        # Mock the file open dialog and simulate the mouse click:
+        if method == 'button':
+            mock_file_open = mock.Mock(return_value=shots)
+            with monkeypatch(QtWidgets.QFileDialog, 'getOpenFileNames', mock_file_open):
+                inmain(self.app.filebox.ui.toolButton_add_shots.click)
+            # Verify the right directory was provided:
+            if expected_file_open_dir is not None:
+                mock_file_open.assert_called_with(ANY, ANY, expected_file_open_dir, ANY)
+        elif method == 'server':
+            for shot in shots:
+                submit_to_lyse(shot)
+
+        def done():
+            nshots = inmain(self.app.filebox.shots_model._model.rowCount)
+            return nshots == initial_nshots + len(shots)
+
+        # Wait for them to be processed:
+        self.wait_for(done)
+
+
 
     def test_add_remove_routines(self):
 
-        # Single shot:
+        # Add single shot rouines:
         self.add_routines(self.app.singleshot_routinebox,
                           [FOO_SINGLESHOT, BAR_SINGLESHOT],
                          expected_file_open_dir=analysislib)
 
-        # Test removing with buttonpress:
-        self.remove_routines(self.app.singleshot_routinebox, [0, 1], method='button')
-
-        # Multi shot:
+        # Add multi shot routines:
         self.add_routines(self.app.multishot_routinebox,
                           [FOO_MULTISHOT, BAR_MULTISHOT],
                          expected_file_open_dir=analysislib)
         
-        # Test removing with delete and shift delete:
+        # Add some shots by file dialog:
+        shot_files_foo = make_shot_files('foo.py', shot_globals=[{'x': i} for i in range(5)])
+        self.add_shots(shot_files_foo, method='button')
+
+        # Add some shots by network:
+        shot_files_bar = make_shot_files('bar.py', shot_globals=[{'y': i**2} for i in range(5)])
+        self.add_shots(shot_files_bar, method='server')
+
+        # Remove the single-shot routines by button press:
+        self.remove_routines(self.app.singleshot_routinebox, [0, 1], method='button')
+
+        # Remove the multi shot routines by keyboard shortcuts:
         self.remove_routines(self.app.multishot_routinebox, [0], method='delete')
         self.remove_routines(self.app.multishot_routinebox, [0], method='shift-delete')
 
+        
 
 if __name__ == '__main__':
     import unittest
