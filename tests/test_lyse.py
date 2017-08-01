@@ -190,9 +190,37 @@ class LyseTests(LyseTestCase):
         # Wait for them to be processed:
         self.wait_for(done)
 
+    def set_visible_columns(self, column_names):
+        """Set the visible columns by simulating interaction with the
+        set columns dialog"""
+        inmain(self.app.filebox.ui.pushButton_edit_columns.click)
+        dialog = self.app.filebox.edit_columns_dialog
 
+        # uncheck all columns
+        inmain(dialog.select_all_checkbox.setCheckState, QtCore.Qt.Unchecked)
 
-    def test_add_remove_routines(self):
+        # Look for our columns and check them:
+        for i in range(inmain(dialog.model.rowCount)):
+            name_item = inmain(dialog.model.item, i, dialog.COL_NAME)
+            if inmain(name_item.text) in column_names:
+                visible_item = inmain(dialog.model.item, i, dialog.COL_VISIBLE)
+                inmain(visible_item.setCheckState, QtCore.Qt.Checked)
+
+        # Click 'ok':
+        inmain(dialog.ui.pushButton_make_it_so.click)
+
+        # Check that these columns are the visible ones:
+        model = self.app.filebox.shots_model._model
+        view = self.app.filebox.shots_model._view
+        for i in range(inmain(model.columnCount)):
+            header_item = inmain(model.horizontalHeaderItem, i)
+            if i == self.app.filebox.shots_model.COL_STATUS:
+                continue
+            if inmain(header_item.text).strip() not in column_names:
+                self.assertTrue(inmain(view.isColumnHidden, i))
+            else:
+                self.assertFalse(inmain(view.isColumnHidden, i))
+    def test_basic(self):
 
         # Add single shot rouines:
         self.add_routines(self.app.singleshot_routinebox,
@@ -204,6 +232,9 @@ class LyseTests(LyseTestCase):
                           [FOO_MULTISHOT, BAR_MULTISHOT],
                          expected_file_open_dir=analysislib)
         
+        # pause analysis so the shots don't run immediately:
+        self.app.filebox.pause_analysis()
+
         # Add some shots by file dialog:
         shot_files_foo = make_shot_files('foo.py', shot_globals=[{'x': i} for i in range(5)])
         self.add_shots(shot_files_foo, method='button')
@@ -211,6 +242,9 @@ class LyseTests(LyseTestCase):
         # Add some shots by network:
         shot_files_bar = make_shot_files('bar.py', shot_globals=[{'y': i**2} for i in range(5)])
         self.add_shots(shot_files_bar, method='server')
+
+        # Make the columns dialog only show 'x' and 'y':
+        self.set_visible_columns(['x', 'y'])
 
         # Remove the single-shot routines by button press:
         self.remove_routines(self.app.singleshot_routinebox, [0, 1], method='button')

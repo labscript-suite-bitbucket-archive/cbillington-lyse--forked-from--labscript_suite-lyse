@@ -1342,7 +1342,7 @@ class DataFrameModel(QtCore.QObject):
             self._model.setHorizontalHeaderItem(column_number, header_item)
         if new_column_names:
             # Update the visibility state of new columns, in case some new columns are hidden:
-            self.set_columns_visible
+            self.set_columns_visible(self.columns_visible)
 
         # Check and remove any no-longer-needed columns in the Qt model:
         defunct_column_names = (set(self.column_names.values()) - set(self.dataframe.columns)
@@ -1417,7 +1417,6 @@ class DataFrameModel(QtCore.QObject):
         """Add/update row indices - the rows are numbered in simple sequential order
         for easy comparison with the dataframe"""
         n_digits = len(str(self._model.rowCount()))
-        print(self._model.rowCount())
         for row_number in range(self._model.rowCount()):
             vertical_header_item = self._model.verticalHeaderItem(row_number)
             filepath_item = self._model.item(row_number, self.COL_FILEPATH)
